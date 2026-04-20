@@ -35,7 +35,7 @@ export async function GET(
 </md:EntityDescriptor>`,
     {
       headers: {
-        "content-type": "application/xml;charset=ISO-8859-1",
+        "content-type": "application/samlmetadata+xml",
         "x-content-type-options": "nosniff",
       },
     },

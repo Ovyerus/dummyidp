@@ -15,6 +15,14 @@ import {
 } from "@/components/ui/accordion";
 import { XmlCodeBlock } from "@/components/XmlCodeBlock";
 import formatXml from "xml-formatter";
+
+function safeFormatXml(xml: string): string {
+  try {
+    return formatXml(xml);
+  } catch {
+    return xml;
+  }
+}
 import { App } from "@/lib/app";
 import { useState } from "react";
 import { DocsLink } from "@/components/DocsLink";
@@ -22,9 +30,11 @@ import { DocsLink } from "@/components/DocsLink";
 export default function LoginCard({
   app,
   samlRequest,
+  relayState,
 }: {
   app: App;
   samlRequest: string;
+  relayState: string;
 }) {
   const [assertion, setAssertion] = useState("");
 
@@ -44,6 +54,7 @@ export default function LoginCard({
             <LoginForm
               app={app}
               samlRequest={samlRequest}
+              relayState={relayState}
               onAssertionChange={setAssertion}
             />
           ) : (
@@ -73,7 +84,7 @@ export default function LoginCard({
                 </p>
 
                 <div className="mt-4">
-                  <XmlCodeBlock code={formatXml(samlRequest)} />
+                  <XmlCodeBlock code={safeFormatXml(samlRequest)} />
                 </div>
               </>
             ) : (
@@ -94,7 +105,7 @@ export default function LoginCard({
 
             {assertion && (
               <div className="mt-4">
-                <XmlCodeBlock code={formatXml(atob(assertion))} />
+                <XmlCodeBlock code={safeFormatXml(atob(assertion))} />
               </div>
             )}
           </AccordionContent>

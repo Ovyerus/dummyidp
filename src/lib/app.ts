@@ -6,6 +6,7 @@ export type App = {
   users: AppUser[];
   spAcsUrl?: string;
   spEntityId?: string;
+  autoSubmit?: boolean;
   scimBaseUrl?: string;
   scimBearerToken?: string;
 };
@@ -91,30 +92,40 @@ export async function upsertApp(app: App): Promise<void> {
     // user. Do not persist state about assigned user IDs between syncs.
     for (const user of app.users) {
       const userId = await scimUserByEmail(app, user.email);
+      const scimUser = {
+        schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+        userName: user.email,
+        name: {
+          givenName: user.firstName,
+          familyName: user.lastName,
+        },
+        emails: [{ value: user.email, primary: true, type: "work" }],
+        active: true,
+      };
       if (userId) {
-        await fetch(`${app.scimBaseUrl}/Users/${userId}`, {
+        const res = await fetch(`${app.scimBaseUrl}/Users/${userId}`, {
           method: "PUT",
-          headers: { Authorization: `Bearer ${app.scimBearerToken}` },
-          body: JSON.stringify({
-            userName: user.email,
-            name: {
-              givenName: user.firstName,
-              familyName: user.lastName,
-            },
-          }),
+          headers: {
+            Authorization: `Bearer ${app.scimBearerToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(scimUser),
         });
+        if (!res.ok) {
+          console.error(`SCIM PUT /Users/${userId} failed: ${res.status}`, await res.text());
+        }
       } else {
-        await fetch(`${app.scimBaseUrl}/Users`, {
+        const res = await fetch(`${app.scimBaseUrl}/Users`, {
           method: "POST",
-          headers: { Authorization: `Bearer ${app.scimBearerToken}` },
-          body: JSON.stringify({
-            userName: user.email,
-            name: {
-              givenName: user.firstName,
-              familyName: user.lastName,
-            },
-          }),
+          headers: {
+            Authorization: `Bearer ${app.scimBearerToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(scimUser),
         });
+        if (!res.ok) {
+          console.error(`SCIM POST /Users failed: ${res.status}`, await res.text());
+        }
       }
     }
 
@@ -122,10 +133,13 @@ export async function upsertApp(app: App): Promise<void> {
     for (const email of deletedUserEmails) {
       const userId = await scimUserByEmail(app, email);
       if (userId) {
-        await fetch(`${app.scimBaseUrl}/Users/${userId}`, {
+        const res = await fetch(`${app.scimBaseUrl}/Users/${userId}`, {
           method: "DELETE",
           headers: { Authorization: `Bearer ${app.scimBearerToken}` },
         });
+        if (!res.ok) {
+          console.error(`SCIM DELETE /Users/${userId} failed: ${res.status}`, await res.text());
+        }
       }
     }
   }
@@ -142,6 +156,10 @@ async function scimUserByEmail(
   const listResponse = await fetch(`${app.scimBaseUrl}/Users?${filter}`, {
     headers: { Authorization: `Bearer ${app.scimBearerToken}` },
   });
+  if (!listResponse.ok) {
+    console.error(`SCIM GET /Users?filter=... failed: ${listResponse.status}`, await listResponse.text());
+    return undefined;
+  }
   const listBody = await listResponse.json();
 
   // in practice, SCIM servers put the results into either `resources` or

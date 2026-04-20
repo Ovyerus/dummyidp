@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useUpsertApp } from "@/lib/hooks";
 
@@ -25,6 +26,7 @@ const formSchema = z.object({
   spEntityId: z.string().min(1, {
     message: "Service Provider Entity ID is required.",
   }),
+  autoSubmit: z.boolean(),
 });
 
 export function SPSettingsForm({ app }: { app: App }) {
@@ -33,6 +35,7 @@ export function SPSettingsForm({ app }: { app: App }) {
     defaultValues: {
       spAcsUrl: app.spAcsUrl ?? "",
       spEntityId: app.spEntityId ?? "",
+      autoSubmit: app.autoSubmit ?? false,
     },
   });
 
@@ -42,6 +45,7 @@ export function SPSettingsForm({ app }: { app: App }) {
       ...app,
       spAcsUrl: values.spAcsUrl,
       spEntityId: values.spEntityId,
+      autoSubmit: values.autoSubmit,
     });
 
     toast.success("App SP settings updated");
@@ -59,7 +63,6 @@ export function SPSettingsForm({ app }: { app: App }) {
               <FormControl>
                 <Input placeholder="https://..." {...field} />
               </FormControl>
-              {/*<FormDescription>sp acs url</FormDescription>*/}
               <FormMessage />
             </FormItem>
           )}
@@ -73,8 +76,29 @@ export function SPSettingsForm({ app }: { app: App }) {
               <FormControl>
                 <Input placeholder="https://..." {...field} />
               </FormControl>
-              {/*<FormDescription>sp acs url</FormDescription>*/}
               <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="autoSubmit"
+          render={({ field }) => (
+            <FormItem>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="autoSubmit"
+                  checked={field.value}
+                  onChange={field.onChange}
+                  className="h-4 w-4"
+                />
+                <Label htmlFor="autoSubmit">Auto-submit login</Label>
+              </div>
+              <FormDescription>
+                When enabled, the Simulate Login page automatically submits as
+                the first configured user without requiring manual interaction.
+              </FormDescription>
             </FormItem>
           )}
         />

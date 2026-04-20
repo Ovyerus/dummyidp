@@ -11,14 +11,37 @@ import Layout from "@/components/Layout";
 import { useRouter } from "next/router";
 import { useApp } from "@/lib/hooks";
 import Head from "next/head";
+import { useEffect, useState } from "react";
 
 export default function Page() {
   const router = useRouter();
   const app = useApp(router.query.id as string);
 
-  const samlRequest = router.query.SAMLRequest
-    ? atob(router.query.SAMLRequest as string)
-    : "";
+  const [samlRequest, setSamlRequest] = useState("");
+  useEffect(() => {
+    const raw = router.query.SAMLRequest as string | undefined;
+    if (!raw) {
+      setSamlRequest("");
+      return;
+    }
+    // HTTP-Redirect binding: SAMLRequest is base64(deflate(xml)), where base64 may use
+    // URL-safe alphabet (-_ instead of +/). HTTP-POST binding (via sso/route.ts) sends
+    // plain base64(xml) with no deflation.
+    const base64 = raw.replace(/-/g, "+").replace(/_/g, "/");
+    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+    (async () => {
+      try {
+        const ds = new DecompressionStream("deflate-raw");
+        const writer = ds.writable.getWriter();
+        writer.write(bytes);
+        writer.close();
+        setSamlRequest(await new Response(ds.readable).text());
+      } catch {
+        // Not deflated — HTTP-POST binding path
+        setSamlRequest(new TextDecoder().decode(bytes));
+      }
+    })();
+  }, [router.query.SAMLRequest]);
 
   return (
     <Layout>
@@ -53,7 +76,13 @@ export default function Page() {
             <DocsLink to="https://ssoready.com/docs/dummyidp#simulating-saml-logins" />
           </p>
 
-          {app && <LoginCard app={app} samlRequest={samlRequest} />}
+          {app && (
+            <LoginCard
+              app={app}
+              samlRequest={samlRequest}
+              relayState={(router.query.RelayState as string) ?? ""}
+            />
+          )}
         </div>
       </div>
     </Layout>

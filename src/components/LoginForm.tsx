@@ -43,10 +43,12 @@ const FormSchema = z.object({
 export function LoginForm({
   app,
   samlRequest,
+  relayState,
   onAssertionChange,
 }: {
   app: App;
   samlRequest: string;
+  relayState: string;
   onAssertionChange: (assertion: string) => void;
 }) {
   const sessionId = useMemo(() => {
@@ -97,22 +99,35 @@ export function LoginForm({
       setAssertion(
         await encodeAssertion(key, {
           assertionId: crypto.randomUUID(),
+          responseId: crypto.randomUUID(),
           idpEntityId: appIdpEntityId(app),
           subjectId: user.email,
           firstName: user.firstName,
           lastName: user.lastName,
           spEntityId: app.spEntityId!,
+          spAcsUrl: app.spAcsUrl!,
           sessionId: sessionId,
           now: now.format(),
           expire: expire.format(),
         }),
       );
     })();
-  }, [userIndex]);
+  }, [userIndex, samlRequest]);
 
   useEffect(() => {
     onAssertionChange(assertion);
   }, [assertion]);
+
+  useEffect(() => {
+    // For SP-initiated flows (samlRequest present), wait until sessionId is extracted
+    // before auto-submitting so InResponseTo is populated correctly.
+    const spInitiated = samlRequest !== "";
+    if (app.autoSubmit && assertion && (!spInitiated || sessionId)) {
+      inputRef.current!.value = assertion;
+      inputRef.current!.form!.action = app.spAcsUrl!;
+      inputRef.current!.form!.submit();
+    }
+  }, [app.autoSubmit, assertion, sessionId, samlRequest]);
 
   const inputRef = useRef<HTMLInputElement>(null);
   function handleSubmit(data: z.infer<typeof FormSchema>) {
@@ -125,6 +140,7 @@ export function LoginForm({
     <div>
       <form method="post">
         <input type="hidden" name="SAMLResponse" ref={inputRef} />
+        {relayState && <input type="hidden" name="RelayState" value={relayState} />}
       </form>
 
       <Form {...form}>
