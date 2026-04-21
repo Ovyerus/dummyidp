@@ -29,6 +29,7 @@ import { INSECURE_PUBLIC_CERTIFICATE } from "@/lib/insecure-cert";
 import { SPSettingsForm } from "@/components/SPSettingsForm";
 import { SCIMSettingsForm } from "@/components/SCIMSettingsForm";
 import { UsersSettingsForm } from "@/components/UsersSettingsForm";
+import { GroupsSettingsForm } from "@/components/GroupsSettingsForm";
 import Head from "next/head";
 
 export default function Page() {
@@ -170,6 +171,19 @@ export default function Page() {
               </CardHeader>
               <CardContent>
                 {app && <UsersSettingsForm app={app} />}
+              </CardContent>
+            </Card>
+            <Card className="col-span-6">
+              <CardHeader>
+                <CardTitle>Groups</CardTitle>
+                <CardDescription>
+                  Define groups and assign users to them. Group membership is sent as a{" "}
+                  <code>groups</code> attribute in SAML assertions and synced to SCIM{" "}
+                  <code>/Groups</code> if SCIM is configured.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {app && <GroupsSettingsForm app={app} />}
               </CardContent>
             </Card>
           </div>

@@ -79,6 +79,13 @@ export function LoginForm({
     return app.users[parseInt(userIndex)];
   }, [app, userIndex]);
 
+  const userGroups = useMemo(() => {
+    if (!app.groups || !user) return [];
+    return app.groups
+      .filter(g => g.memberEmails.includes(user.email))
+      .map(g => g.name);
+  }, [app.groups, user]);
+
   const [assertion, setAssertion] = useState("");
   useEffect(() => {
     (async () => {
@@ -109,10 +116,11 @@ export function LoginForm({
           sessionId: sessionId,
           now: now.format(),
           expire: expire.format(),
+          groups: userGroups,
         }),
       );
     })();
-  }, [userIndex, samlRequest]);
+  }, [userIndex, samlRequest, userGroups]);
 
   useEffect(() => {
     onAssertionChange(assertion);

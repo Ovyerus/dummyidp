@@ -27,6 +27,9 @@ the changes bring the implementation closer to spec.
 - SCIM: outbound push requests now include `Content-Type: application/json`,
   `schemas`, `emails`, and `active` fields required by strict SCIM consumers
 - UI: added "Auto-submit login" option to skip the manual proceed step
+- Groups: apps can now define groups and assign users to them; group membership
+  is sent as a `groups` attribute in SAML assertions and synced to the SP via
+  SCIM `/Groups` (PUT/POST/DELETE) when SCIM is configured
 
 ---
 

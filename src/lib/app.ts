@@ -1,20 +1,26 @@
 import { ulid } from "ulid";
 import { kv } from "@vercel/kv";
 
+export type AppUser = {
+  email: string;
+  firstName: string;
+  lastName: string;
+};
+
+export type AppGroup = {
+  name: string;
+  memberEmails: string[];
+};
+
 export type App = {
   id: string;
   users: AppUser[];
+  groups?: AppGroup[];
   spAcsUrl?: string;
   spEntityId?: string;
   autoSubmit?: boolean;
   scimBaseUrl?: string;
   scimBearerToken?: string;
-};
-
-export type AppUser = {
-  email: string;
-  firstName: string;
-  lastName: string;
 };
 
 export function appIdpEntityId(app: App): string {
@@ -37,6 +43,7 @@ export async function createApp(): Promise<string> {
   const id = `app_${ulid().toLowerCase()}`;
   await kv.hset(id, {
     id,
+    groups: [],
     users: [
       { email: "john.doe@example.com", firstName: "John", lastName: "Doe" },
       {
@@ -75,6 +82,15 @@ export async function upsertApp(app: App): Promise<void> {
 
       if (!found) {
         deletedUserEmails.push(oldUser.email);
+      }
+    }
+  }
+
+  const deletedGroupNames: string[] = [];
+  if (oldApp?.groups) {
+    for (const oldGroup of oldApp.groups) {
+      if (!(app.groups ?? []).find(g => g.name === oldGroup.name)) {
+        deletedGroupNames.push(oldGroup.name);
       }
     }
   }
@@ -142,7 +158,103 @@ export async function upsertApp(app: App): Promise<void> {
         }
       }
     }
+
+    // sync groups
+    for (const group of app.groups ?? []) {
+      const groupId = await scimGroupByName(app, group.name);
+
+      // resolve member SCIM user IDs; users were synced above so IDs should exist,
+      // but resolution is best-effort — some SCIM servers may not return new users immediately
+      const members: { value: string; display: string }[] = [];
+      for (const email of group.memberEmails) {
+        const userId = await scimUserByEmail(app, email);
+        if (userId) {
+          members.push({ value: userId, display: email });
+        }
+      }
+
+      const scimGroup = {
+        schemas: ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+        displayName: group.name,
+        members,
+      };
+
+      if (groupId) {
+        const res = await fetch(`${app.scimBaseUrl}/Groups/${groupId}`, {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${app.scimBearerToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(scimGroup),
+        });
+        if (!res.ok) {
+          console.error(
+            `SCIM PUT /Groups/${groupId} failed: ${res.status}`,
+            await res.text(),
+          );
+        }
+      } else {
+        const res = await fetch(`${app.scimBaseUrl}/Groups`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${app.scimBearerToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(scimGroup),
+        });
+        if (!res.ok) {
+          console.error(
+            `SCIM POST /Groups failed: ${res.status}`,
+            await res.text(),
+          );
+        }
+      }
+    }
+
+    // delete removed groups
+    for (const name of deletedGroupNames) {
+      const groupId = await scimGroupByName(app, name);
+      if (groupId) {
+        const res = await fetch(`${app.scimBaseUrl}/Groups/${groupId}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${app.scimBearerToken}` },
+        });
+        if (!res.ok) {
+          console.error(
+            `SCIM DELETE /Groups/${groupId} failed: ${res.status}`,
+            await res.text(),
+          );
+        }
+      }
+    }
   }
+}
+
+async function scimGroupByName(
+  app: App,
+  name: string,
+): Promise<string | undefined> {
+  const filter = new URLSearchParams({
+    filter: `displayName eq "${name.replace(/"/g, '\\"')}"`,
+  });
+
+  const listResponse = await fetch(`${app.scimBaseUrl}/Groups?${filter}`, {
+    headers: { Authorization: `Bearer ${app.scimBearerToken}` },
+  });
+  if (!listResponse.ok) {
+    console.error(
+      `SCIM GET /Groups?filter=... failed: ${listResponse.status}`,
+      await listResponse.text(),
+    );
+    return undefined;
+  }
+  const listBody = await listResponse.json();
+  const resources = listBody?.resources ?? listBody?.Resources ?? [];
+  if (resources.length > 0) {
+    return resources[0].id;
+  }
+  return undefined;
 }
 
 async function scimUserByEmail(
